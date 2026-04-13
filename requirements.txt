@@ -1,0 +1,8 @@
+openai
+python-dotenv
+tiktoken
+faiss-cpu
+numpy
+gradio
+pymupdf
+rank_bm25
