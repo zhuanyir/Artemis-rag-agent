@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-CORPUS_PATH = Path("../data/corpus.json")  # 如果你的 corpus.json 不在 data/，就改路径
+CORPUS_PATH = Path("../data/corpus.json")  # if the corpus.json is not in data/，change this path accordingly
 
 def main():
     with open(CORPUS_PATH, "r", encoding="utf-8") as f:
