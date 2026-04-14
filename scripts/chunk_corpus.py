@@ -18,8 +18,8 @@ MODEL_NAME = "gpt-4o-mini"
 
 # Token-based chunking settings
 # Start with these values to stay near your previous chunk count
-CHUNK_SIZE_TOKENS = 220
-CHUNK_OVERLAP_TOKENS = 40
+CHUNK_SIZE_TOKENS = 130
+CHUNK_OVERLAP_TOKENS = 26
 
 # Skip entries that are empty or too short
 MIN_TEXT_LENGTH = 50
