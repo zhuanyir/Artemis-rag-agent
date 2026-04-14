@@ -24,6 +24,9 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+from dotenv import load_dotenv
+load_dotenv()  # loads OPENAI_API_KEY from .env before anything else runs
+
 # ── paths ──────────────────────────────────────────────────────────────────────
 ROOT        = Path(__file__).resolve().parent.parent
 QUESTIONS   = ROOT / "data" / "questions.json"
