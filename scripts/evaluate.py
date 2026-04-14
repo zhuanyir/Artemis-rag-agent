@@ -24,6 +24,9 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+from dotenv import load_dotenv
+load_dotenv()  # loads OPENAI_API_KEY from .env before anything else runs
+
 # ── paths ──────────────────────────────────────────────────────────────────────
 ROOT        = Path(__file__).resolve().parent.parent
 QUESTIONS   = ROOT / "data" / "questions.json"
@@ -55,20 +58,36 @@ def mock_rag_pipeline(question: str) -> dict:
 
 
 def load_real_pipeline():
-    """Import retriever + generator. Falls back to mock if not ready."""
     try:
         import sys
         sys.path.insert(0, str(ROOT / "app"))
-        from retriever import retrieve
+        from retriever import load_index_and_chunks, retrieve
         from generator import generate_answer
-
+ 
+        index, chunks = load_index_and_chunks()   # load once
+ 
         def real_pipeline(question: str) -> dict:
-            chunks = retrieve(question, top_k=5)
-            return generate_answer(question, chunks)
-
+            retrieved = retrieve(question, index, chunks, final_k=5)
+            answer = generate_answer(question, retrieved)
+ 
+            # Detect refusal
+            refused = "i don't have information" in answer.lower()
+ 
+            # Format sources
+            sources = [
+                {"source": c["source"], "page": c["page"], "chunk_id": c.get("chunk_id")}
+                for c in retrieved
+            ]
+ 
+            return {
+                "answer":  answer,
+                "sources": sources,
+                "refused": refused,
+            }
+ 
         print(f"{C.GREEN}✓ Real pipeline loaded.{C.RESET}")
         return real_pipeline
-
+ 
     except Exception as e:
         print(f"{C.YELLOW}⚠  Real pipeline not available ({e}). Using mock.{C.RESET}")
         return mock_rag_pipeline
