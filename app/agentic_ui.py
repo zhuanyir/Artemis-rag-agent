@@ -106,14 +106,59 @@ def _build_chunks_from_corpus() -> list[dict]:
     return chunks
 
 
+def _enrich_chunks_with_corpus(chunks: list[dict]) -> list[dict]:
+    """
+    Add 'source' and 'page' fields to old-format chunks using corpus.json.
+
+    Old chunks (from chunk_corpus.py) have 'document_id' but no 'source'/'page'.
+    New chunks (from _build_chunks_from_corpus) already have 'source'/'page'.
+    This function is a no-op for new-format chunks.
+    """
+    if not chunks:
+        return chunks
+
+    # If the first chunk already has 'source', nothing to do
+    if "source" in chunks[0]:
+        return chunks
+
+    corpus: list[dict] = []
+    if CORPUS_PATH.exists():
+        with open(CORPUS_PATH, encoding="utf-8") as f:
+            corpus = json.load(f)
+
+    for chunk in chunks:
+        doc_id = chunk.get("document_id", -1)
+        if corpus and 0 <= doc_id < len(corpus):
+            chunk["source"] = corpus[doc_id].get("source", "unknown")
+            chunk["page"]   = corpus[doc_id].get("page", -1)
+        else:
+            chunk["source"] = chunk.get("document_title", "unknown")
+            chunk["page"]   = -1
+        # Normalise chunk_id field
+        chunk.setdefault("chunk_id", chunk.get("id", -1))
+
+    print(f"[startup] ✅ Enriched {len(chunks)} chunks with source/page from corpus.json")
+    return chunks
+
+
 def _ensure_chunks() -> list[dict]:
-    """Load chunks.json, auto-generating it first if it doesn't exist."""
+    """
+    Load chunks.json from disk. Enriches old-format chunks with source/page.
+
+    IMPORTANT: This function never regenerates or overwrites chunks.json.
+    If the file is missing or corrupted, run scripts/chunk_corpus.py to rebuild it.
+    That script produces the authoritative 1161-chunk file that aligns with index.faiss.
+    """
     if not CHUNKS_PATH.exists():
-        return _build_chunks_from_corpus()
+        raise FileNotFoundError(
+            f"chunks.json not found at {CHUNKS_PATH}.\n"
+            "Run: python scripts/chunk_corpus.py"
+        )
     with open(CHUNKS_PATH, encoding="utf-8") as f:
         chunks = json.load(f)
-    print(f"[startup] ✅ Loaded {len(chunks)} chunks from data/chunks.json (cached)")
-    return chunks
+    print(f"[startup] ✅ Loaded {len(chunks)} chunks from data/chunks.json")
+    # Enrich old-format chunks (document_id format) with source/page if needed
+    return _enrich_chunks_with_corpus(chunks)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -146,27 +191,20 @@ try:
 
     # ── Step 3: verify alignment ──────────────────────────────────────────────
     # The number of chunks must match the number of vectors in the index.
-    # If they don't, the index was built from a different chunking run.
+    # IMPORTANT: Do NOT regenerate chunks.json here — doing so would overwrite
+    # the authoritative file (built by scripts/chunk_corpus.py) with a different
+    # token-based splitting that breaks FAISS alignment. Just warn and continue.
     if _index.ntotal != len(_chunks_list):
         print(
             f"[startup] ⚠ Mismatch: index has {_index.ntotal} vectors "
             f"but chunks.json has {len(_chunks_list)} entries.\n"
-            f"          Regenerating chunks.json to match..."
+            f"          Run scripts/chunk_corpus.py then scripts/embed.py to fix.\n"
+            f"          Continuing with loaded chunks — retrieval may be partial."
         )
-        # Force-regenerate chunks from scratch
-        CHUNKS_PATH.unlink(missing_ok=True)
-        _chunks_list = _build_chunks_from_corpus()
-
-        # If still mismatched after regeneration, warn but continue
-        if _index.ntotal != len(_chunks_list):
-            print(
-                f"[startup] ⚠ Still mismatched after regeneration "
-                f"({_index.ntotal} vs {len(_chunks_list)}).\n"
-                f"          Retrieval will work but chunk text may be off by a few entries."
-            )
 
     # ── Step 4: load app modules ──────────────────────────────────────────────
     from generator import generate_answer, build_context
+    from retriever import retrieve as _retriever_retrieve
     from agents    import run_agentic_pipeline, _call_mcp_tool
     from mcp_server import (
         add_to_database    as mcp_add_to_database,
@@ -186,62 +224,38 @@ except Exception as _err:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  RETRIEVAL (local to this file — doesn't depend on retriever.py globals)
+#  RETRIEVAL — delegates to retriever.py for consistent, proven behaviour
+#  (same reranking logic as the standalone app.py RAG)
 # ══════════════════════════════════════════════════════════════════════════════
-
-def _embed_query(text: str) -> "np.ndarray":
-    """Embed a single query string. This is the ONLY API call in retrieval."""
-    resp = _openai_client.embeddings.create(
-        model="text-embedding-3-small",
-        input=text,
-    )
-    vec = np.array(resp.data[0].embedding, dtype="float32").reshape(1, -1)
-    faiss.normalize_L2(vec)
-    return vec
-
 
 def _retrieve(query: str, final_k: int = 5, candidate_k: int = 10) -> list[dict]:
     """
-    Embed the query and search the FAISS index.
-    Returns top final_k chunks with score metadata.
+    Retrieve top chunks using retriever.py's full heuristic reranker.
+    This is identical to what the standalone app.py uses, ensuring
+    factual questions get the right specific chunks ranked first.
 
     COST: exactly 1 embedding API call per query (~$0.000002).
     """
     if not PIPELINE_READY:
         return []
-
-    vec = _embed_query(query)
-    scores, indices = _index.search(vec, candidate_k)
-
-    results = []
-    for score, idx in zip(scores[0], indices[0]):
-        if idx < 0 or idx >= len(_chunks_list):
-            continue
-        chunk = dict(_chunks_list[idx])
-        chunk["score"] = round(float(score), 4)
-        results.append(chunk)
-
-    # Heuristic rerank (free — pure Python, no API)
-    pos = ["lunar","orion","sls","crew","mission","flyby","artemis","requirements"]
-    neg = ["manager","biography","career"]
-    for c in results:
-        t = c.get("text","").lower()
-        b = sum(0.04 for w in pos if w in t) - sum(0.10 for w in neg if w in t)
-        c["rerank_score"] = round(c["score"] + b, 4)
-
-    results.sort(key=lambda x: x["rerank_score"], reverse=True)
-    return results[:final_k]
+    return _retriever_retrieve(
+        query=query,
+        index=_index,
+        chunks=_chunks_list,
+        final_k=final_k,
+        candidate_k=candidate_k,
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  PLAIN RAG (wraps retrieval + generator)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def run_plain_rag(query: str) -> tuple[str, list]:
+def run_plain_rag(query: str, history: list | None = None) -> tuple[str, list]:
     if not PIPELINE_READY:
         return ("⚠️  Pipeline not ready. Check terminal for startup errors.", [])
     chunks = _retrieve(query)
-    answer = generate_answer(query, chunks, history=None)
+    answer = generate_answer(query, chunks, history=history)
     return answer, chunks
 
 
@@ -599,7 +613,7 @@ def build_ui() -> gr.Blocks:
                 </div>""")
 
                 def rag_chat(msg, hist):
-                    ans, chunks = run_plain_rag(msg)
+                    ans, chunks = run_plain_rag(msg, history=hist)
                     src = format_sources(chunks)
                     return f"{ans}\n\n---\n{src}" if src else ans
 
