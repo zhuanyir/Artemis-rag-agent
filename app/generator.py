@@ -73,10 +73,7 @@ COST_FILE = os.path.join(os.path.dirname(__file__), "..", "cost_tracker.json")
 
 
 def track_cost(response) -> None:
-    """
-    Track cumulative API cost to stay within the $5 team budget.
-    Prints cost per call and running total.
-    """
+    """Track cumulative API cost to stay within the $5 team budget."""
     usage = response.usage
     cost = (
         usage.prompt_tokens * 0.15 +
@@ -114,9 +111,7 @@ FOLLOW_UP_INDICATORS = [
 
 
 def is_followup(query: str, history: list[Any] | None) -> bool:
-    """
-    Returns True if the query looks like a follow-up to a previous turn.
-    """
+    """Returns True if the query looks like a follow-up to a previous turn."""
     if not history:
         return False
 
@@ -126,7 +121,6 @@ def is_followup(query: str, history: list[Any] | None) -> bool:
     if not words:
         return False
 
-    # Short queries often depend on prior context
     if len(words) <= 4:
         print("[generator] Follow-up detected: short query.")
         return True
@@ -148,12 +142,8 @@ def is_followup(query: str, history: list[Any] | None) -> bool:
 # ── Yes/No detection ──────────────────────────────────────────────────────────
 
 def is_yes_no_question(query: str) -> bool:
-    """
-    Return True if the question is likely a yes/no question.
-    Checks if the query starts with common yes/no question words.
-    """
+    """Return True if the question is likely a yes/no question."""
     q = query.lower().strip()
-
     yes_no_starts = (
         "is ", "are ", "was ", "were ",
         "does ", "do ", "did ",
@@ -161,16 +151,13 @@ def is_yes_no_question(query: str) -> bool:
         "will ", "would ",
         "has ", "have ", "had ",
     )
-
     return q.startswith(yes_no_starts)
 
 
 # ── Context builder ───────────────────────────────────────────────────────────
 
 def build_context(retrieved_chunks: list[dict]) -> str:
-    """
-    Format retrieved chunks into a context string for the prompt.
-    """
+    """Format retrieved chunks into a context string for the prompt."""
     return "\n\n".join(
         f"[Source: {chunk['source']} p.{chunk['page']}]\n{chunk['text']}"
         for chunk in retrieved_chunks
@@ -180,12 +167,29 @@ def build_context(retrieved_chunks: list[dict]) -> str:
 # ── History conversion ────────────────────────────────────────────────────────
 
 def clean_assistant_message(text: str) -> str:
-    """
-    Remove the appended sources block before reinjecting assistant replies.
-    """
+    """Remove the appended sources block before reinjecting assistant replies."""
     if not isinstance(text, str):
         return ""
     return text.split("\n\n---\n**Sources retrieved:**")[0].strip()
+
+
+def _extract_text(turn_content) -> str:
+    """
+    Extract plain text from a Gradio turn which may be:
+    - A plain string
+    - A list of {"text": "...", "type": "text"} dicts (Gradio 6.12 format)
+    """
+    if isinstance(turn_content, str):
+        return turn_content
+    if isinstance(turn_content, list):
+        parts = []
+        for item in turn_content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                parts.append(item.get("text", ""))
+            elif isinstance(item, str):
+                parts.append(item)
+        return " ".join(parts).strip()
+    return ""
 
 
 def extract_history_messages(
@@ -195,48 +199,43 @@ def extract_history_messages(
     """
     Convert Gradio history into OpenAI chat messages.
 
-    Supports both:
-    1. Old format: [[user, assistant], [user, assistant], ...]
+    Supports:
+    1. Gradio 6.x format: [[user_content, assistant_content], ...]
+       where each content is either a string or list of {"text":..., "type":...} dicts
     2. Messages format: [{"role": "user", "content": ...}, ...]
-
-    Returns:
-        A list of OpenAI-style messages.
+    3. Old tuple format: [[str, str], ...]
     """
     if not history:
         return []
 
     history_messages: list[dict[str, str]] = []
 
-    # Case 1: Gradio "messages" format
+    # Case 1: role/content dict format
     if all(isinstance(item, dict) and "role" in item and "content" in item for item in history):
         recent = history[-(max_turns * 2):]
-
         for msg in recent:
-            role = msg.get("role")
-            content = msg.get("content")
-
-            if role not in {"user", "assistant"}:
-                continue
-            if not isinstance(content, str) or not content.strip():
+            role    = msg.get("role")
+            content = _extract_text(msg.get("content", ""))
+            if role not in {"user", "assistant"} or not content.strip():
                 continue
             if role == "assistant":
                 content = clean_assistant_message(content)
-
             history_messages.append({"role": role, "content": content})
-
         return history_messages
 
-    # Case 2: old Gradio tuple/list format
+    # Case 2 & 3: list of [user_turn, assistant_turn] pairs
     for turn in history[-max_turns:]:
         if isinstance(turn, (list, tuple)) and len(turn) == 2:
-            user_msg, bot_msg = turn
+            user_raw, bot_raw = turn
 
-            if isinstance(user_msg, str) and user_msg.strip():
+            user_msg = _extract_text(user_raw)
+            bot_msg  = _extract_text(bot_raw)
+
+            if user_msg.strip():
                 history_messages.append({"role": "user", "content": user_msg})
-
-            if isinstance(bot_msg, str) and bot_msg.strip():
+            if bot_msg.strip():
                 history_messages.append({
-                    "role": "assistant",
+                    "role":    "assistant",
                     "content": clean_assistant_message(bot_msg),
                 })
 
@@ -253,19 +252,8 @@ def generate_answer(
     """
     Generate a synthesized answer from retrieved chunks using gpt-4o-mini.
 
-    Injects conversation history only when the query is detected as a follow-up,
-    keeping token usage lower for standalone questions.
-
-    For yes/no questions, injects a strict extra instruction so the model
-    responds with ONLY "Yes" or "No" — no explanation or citations.
-
-    Args:
-        query: The user's question.
-        retrieved_chunks: List of chunk dicts from retrieve().
-        history: Gradio chat history in either old or messages format.
-
-    Returns:
-        A synthesized answer with inline citations, or the fallback message.
+    Injects conversation history only when the query is detected as a follow-up.
+    For yes/no questions, injects a strict extra instruction.
     """
     if not retrieved_chunks:
         return "I don't have information about this in the Artemis II documents."
