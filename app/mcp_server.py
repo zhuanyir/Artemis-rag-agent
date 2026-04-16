@@ -106,15 +106,10 @@ def web_search(query: str, max_results: int = 5) -> str:
     """
     Search the live internet for up-to-date information.
 
-    WHY THIS EXISTS:
-        Your corpus may be outdated. This tool finds which web pages are
-        relevant to a query. The URLs it returns should then be passed to
-        fetch_webpage() to retrieve the full page content.
-
     HOW IT WORKS:
-        DuckDuckGo search → returns title + URL + snippet for each result.
-        NOTE: Snippets are only 1-2 sentence previews. Always follow up
-        with fetch_webpage(url) to get the full content of important URLs.
+        Primary:  DuckDuckGo (DDGS) → title + URL + snippet per result.
+        Fallback: Wikipedia OpenSearch API → used if DuckDuckGo fails or
+                  returns no results (rate-limit, network block, etc.)
 
     Args:
         query:       The search query string (e.g. "Artemis II launch date 2026")
@@ -124,14 +119,14 @@ def web_search(query: str, max_results: int = 5) -> str:
         A formatted string with title, URL, and snippet for each result.
         Use the URLs with fetch_webpage() to get full page content.
     """
-    try:
-        from duckduckgo_search import DDGS
-    except ImportError:
-        return "ERROR: Install duckduckgo-search:  pip install duckduckgo-search"
+    import requests as _req
 
     max_results = min(max_results, 10)
+    ddgs_error  = None
 
+    # ── Primary: DuckDuckGo ───────────────────────────────────────────────────
     try:
+        from duckduckgo_search import DDGS
         results = []
         with DDGS() as ddgs:
             for r in ddgs.text(query, max_results=max_results):
@@ -140,19 +135,70 @@ def web_search(query: str, max_results: int = 5) -> str:
                     f"URL:     {r.get('href', 'N/A')}\n"
                     f"SNIPPET: {r.get('body', 'N/A')}\n"
                 )
-
-        if not results:
-            return f"No results found for query: '{query}'"
-
-        header = (
-            f"=== Web Search Results for: '{query}' ({len(results)} results) ===\n"
-            f"⚠️  These are SNIPPETS only. Call fetch_webpage(url) on the most\n"
-            f"    relevant URLs below to read the actual full page content.\n\n"
-        )
-        return header + "\n---\n".join(results)
-
+        if results:
+            header = (
+                f"=== Web Search Results for: '{query}' ({len(results)} results) ===\n"
+                f"⚠️  These are SNIPPETS only. Call fetch_webpage(url) on the most\n"
+                f"    relevant URLs below to read the actual full page content.\n\n"
+            )
+            return header + "\n---\n".join(results)
+        ddgs_error = "DuckDuckGo returned no results"
+    except ImportError:
+        ddgs_error = "duckduckgo_search not installed"
     except Exception as e:
-        return f"Web search failed: {e}"
+        ddgs_error = str(e)
+
+    print(f"[MCP] web_search: DuckDuckGo failed ({ddgs_error}), trying Wikipedia fallback...")
+
+    # ── Fallback A: Wikipedia Full-text Search API ────────────────────────────
+    try:
+        resp = _req.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action":   "query",
+                "list":     "search",
+                "srsearch": query,
+                "srlimit":  max_results,
+                "format":   "json",
+            },
+            timeout=10,
+            headers={"User-Agent": "ArtemisRAG-Agent/1.0"},
+        )
+        resp.raise_for_status()
+        data   = resp.json()
+        hits   = data.get("query", {}).get("search", [])
+
+        if hits:
+            results = []
+            for h in hits:
+                title   = h.get("title", "N/A")
+                snippet = re.sub(r"<[^>]+>", "", h.get("snippet", "N/A"))  # strip HTML tags
+                url     = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
+                results.append(
+                    f"TITLE:   {title}\n"
+                    f"URL:     {url}\n"
+                    f"SNIPPET: {snippet}\n"
+                )
+            header = (
+                f"=== Web Search Results for: '{query}' ({len(results)} results) ===\n"
+                f"[Source: Wikipedia Search — DuckDuckGo unavailable: {ddgs_error}]\n\n"
+            )
+            return header + "\n---\n".join(results)
+    except Exception as e2:
+        ddgs_error += f" | Wikipedia search also failed: {e2}"
+
+    # ── Fallback B: Return a synthetic result pointing to Wikipedia directly ──
+    # Even if search APIs fail, we can return a direct Wikipedia URL
+    # so that fetch_wikipedia_page() can still retrieve the article.
+    topic_guess = query.split()[:3]  # first 3 words as best-guess article title
+    wiki_title  = "_".join(w.capitalize() for w in topic_guess)
+    fallback_url = f"https://en.wikipedia.org/wiki/{wiki_title}"
+    return (
+        f"=== Web Search (limited — {ddgs_error}) ===\n\n"
+        f"TITLE:   {' '.join(topic_guess)} (Wikipedia best-guess)\n"
+        f"URL:     {fallback_url}\n"
+        f"SNIPPET: Direct Wikipedia URL for the topic — fetch with fetch_wikipedia_page()\n"
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -303,44 +349,95 @@ def fetch_wikipedia_page(topic: str, max_chars: int = 5000) -> str:
     """
     Fetch the full content of a Wikipedia article by topic name.
 
-    WHY THIS EXISTS:
-        The previous search_wikipedia() tool only returned 5 intro sentences.
-        For rich topics like Artemis II, the full article body contains:
-          - Complete crew biographies
-          - Detailed mission timeline and objectives
-          - Spacecraft specifications
-          - Launch date history and delays
-          - References and external links
-
-        This tool fetches the real Wikipedia page and extracts all of it.
-
     HOW IT WORKS:
-        1. Constructs the Wikipedia URL: https://en.wikipedia.org/wiki/{topic}
-        2. Calls fetch_webpage() to download and clean the HTML
-        3. Returns up to max_chars of the article body
+        1. Wikipedia REST API /page/summary/{title} → fast intro paragraph
+        2. Wikipedia REST API /page/sections/{title}  → full article sections
+        3. Falls back to fetch_webpage scraping if REST API fails
+        4. Falls back to Wikipedia OpenSearch redirect if title not exact
 
     Args:
         topic:     Wikipedia article title (e.g. "Artemis_II", "Victor_Glover")
-                   Use underscores for spaces (Wikipedia URL format)
+                   Spaces or underscores both work.
         max_chars: Max characters to return (default 5000, ~1000 words)
 
     Returns:
         Full Wikipedia article text, or an error if not found.
     """
-    # Normalise topic → Wikipedia URL format (spaces → underscores)
+    import requests as _req
+
+    # Normalise topic: spaces → underscores for URL, but also spaces for display
     topic_clean = topic.strip().replace(" ", "_")
+    # Remove common question words if they crept in (e.g. "What_is_Artemis_II")
+    for prefix in ["What_is_", "What_are_", "Who_are_", "How_does_", "Why_does_",
+                   "When_was_", "Where_is_", "Which_", "What_"]:
+        if topic_clean.startswith(prefix):
+            topic_clean = topic_clean[len(prefix):]
+            break
+
+    headers = {"User-Agent": "ArtemisRAG-Agent/1.0 (educational hackathon project)"}
+
+    print(f"[MCP] fetch_wikipedia_page → topic='{topic_clean}'")
+
+    # ── Method 1: Wikipedia REST API summary ─────────────────────────────────
+    # Gives the intro section (extract) and confirms the article exists
+    try:
+        summary_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{topic_clean}"
+        r = _req.get(summary_url, headers=headers, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            intro = data.get("extract", "")
+            article_title = data.get("title", topic_clean)
+            canonical_url = data.get("content_urls", {}).get("desktop", {}).get("page", "")
+
+            # Try to get more content via the actual wiki page
+            if canonical_url:
+                full = fetch_webpage(canonical_url, max_chars=max_chars)
+                if not full.startswith("ERROR"):
+                    return full
+
+            # Fallback: return at least the intro + whatever we have
+            if intro:
+                return (
+                    f"=== Wikipedia: {article_title} ===\n\n"
+                    f"{intro}\n\n"
+                    f"[Full article: {canonical_url or 'https://en.wikipedia.org/wiki/' + topic_clean}]"
+                )[:max_chars]
+    except Exception as e1:
+        print(f"[MCP] Wikipedia REST API failed: {e1}")
+
+    # ── Method 2: Scrape the wiki page directly ───────────────────────────────
     url = f"https://en.wikipedia.org/wiki/{topic_clean}"
-
-    print(f"[MCP] fetch_wikipedia_page → {url}")
     result = fetch_webpage(url, max_chars=max_chars)
+    if not result.startswith("ERROR"):
+        return result
 
-    # If direct title lookup fails, try a search redirect
-    if result.startswith("ERROR"):
-        # Try Wikipedia's search endpoint as fallback
-        search_url = f"https://en.wikipedia.org/w/index.php?search={topic_clean}&ns0=1"
-        result = fetch_webpage(search_url, max_chars=max_chars)
+    # ── Method 3: Wikipedia OpenSearch → find closest article title ──────────
+    try:
+        search_resp = _req.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action":   "opensearch",
+                "search":   topic.replace("_", " "),
+                "limit":    3,
+                "format":   "json",
+                "profile":  "fuzzy",
+            },
+            headers=headers,
+            timeout=10,
+        )
+        search_data = search_resp.json()
+        titles = search_data[1] if len(search_data) > 1 else []
+        urls   = search_data[3] if len(search_data) > 3 else []
+        if titles and urls:
+            best_url = urls[0]
+            print(f"[MCP] Wikipedia OpenSearch matched: '{titles[0]}' → {best_url}")
+            result2 = fetch_webpage(best_url, max_chars=max_chars)
+            if not result2.startswith("ERROR"):
+                return result2
+    except Exception as e3:
+        print(f"[MCP] Wikipedia OpenSearch failed: {e3}")
 
-    return result
+    return f"ERROR: Could not retrieve Wikipedia article for '{topic}'. Original error: {result}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -611,15 +708,19 @@ def load_pdf_to_database(pdf_path: str) -> str:
 # ENTRY POINT
 # ══════════════════════════════════════════════════════════════════════════════
 
+MCP_HOST = "localhost"
+MCP_PORT = 8080
+
 if __name__ == "__main__":
     print("=" * 60)
     print("  Artemis II MCP Server starting...")
+    print(f"  HTTP endpoint: http://{MCP_HOST}:{MCP_PORT}/mcp")
     print("  Tools available:")
     print("    ✅ web_search             (Step 1a — find URLs + snippets)")
-    print("    ✅ fetch_webpage          (Step 1b — read full page content) [NEW]")
-    print("    ✅ fetch_wikipedia_page   (Step 1c — full Wikipedia article) [NEW]")
+    print("    ✅ fetch_webpage          (Step 1b — read full page content)")
+    print("    ✅ fetch_wikipedia_page   (Step 1c — full Wikipedia article)")
     print("    ✅ create_markdown_report (Step 2 — save report to disk)")
     print("    ✅ add_to_database        (Step 3 — update corpus at runtime)")
     print("    ✅ load_pdf_to_database   (Step 4 — load PDF into corpus)")
     print("=" * 60)
-    mcp.run()
+    mcp.run(transport="streamable-http", host=MCP_HOST, port=MCP_PORT)

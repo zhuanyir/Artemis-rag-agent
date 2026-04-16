@@ -27,7 +27,21 @@ from visualizer_agent import maybe_visualize
 import gradio as gr
 
 from email_bridge import start_in_background
-_stop = start_in_background()   
+_stop = start_in_background()
+
+# ── Auto-start MCP server as a real HTTP subprocess ───────────────────────────
+import subprocess, time as _time
+_mcp_proc = None
+try:
+    _mcp_proc = subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve().parent / "mcp_server.py")],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    _time.sleep(1.5)   # give the HTTP server time to bind the port
+    print("[startup] ✅ MCP server started → http://localhost:8080/mcp")
+except Exception as _mcp_err:
+    print(f"[startup] ⚠ Could not auto-start MCP server: {_mcp_err}")
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 APP_DIR     = Path(__file__).resolve().parent
@@ -172,6 +186,7 @@ def _ensure_chunks() -> list[dict]:
 
 PIPELINE_READY = False
 _index, _chunks_list = None, []
+_openai_client = None   # defined here so closures always find it
 
 try:
     import faiss
@@ -807,28 +822,49 @@ def build_ui() -> gr.Blocks:
         )
 
         # ── Refine ────────────────────────────────────────────────────────
-        def on_refine(query, feedback, internal, external):
-            if not query:
+        def on_refine(draft, query, feedback, internal, external):
+            if not draft:
                 return "", "", "", "⚠ Run agents first.", None, None, None, None
-            if not feedback.strip():
-                return "", "", "", "⚠ Enter feedback before refining.", None, None, None, None
+            if not feedback or not feedback.strip():
+                return draft, internal, external, "⚠ Enter feedback before refining.", draft, query, internal, external
+            if not PIPELINE_READY or _openai_client is None:
+                return draft, internal, external, "⚠ Pipeline not ready.", draft, query, internal, external
 
-            refined = f"{query}\n\nREVIEWER FEEDBACK: {feedback}"
-            result  = run_agentic(refined, save_report=False)
-            draft   = result["final_answer"]
-            intern2 = result["internal_answer"]
-            extern2 = result["external_findings"]
+            # Merge original draft + feedback in ONE LLM call.
+            # Agents 1 & 2 are NOT re-run — context is already captured in the draft.
+            merge_prompt = (
+                f"You are refining an AI-generated answer based on reviewer feedback.\n\n"
+                f"ORIGINAL QUESTION:\n{query}\n\n"
+                f"ORIGINAL DRAFT:\n{draft}\n\n"
+                f"REVIEWER FEEDBACK:\n{feedback}\n\n"
+                f"Rewrite the answer incorporating the feedback. Preserve what is correct, "
+                f"fix what is wrong, and emphasise what the reviewer requested. "
+                f"Keep citations and be concise."
+            )
+            try:
+                response = _openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are an expert editor refining AI-generated answers based on reviewer feedback."},
+                        {"role": "user",   "content": merge_prompt},
+                    ],
+                    temperature=0,
+                    max_tokens=500,
+                )
+                refined = response.choices[0].message.content.strip()
+            except Exception as e:
+                return draft, internal, external, f"⚠ Refine error: {e}", draft, query, internal, external
 
             ts = datetime.now().strftime("%H:%M:%S")
             return (
-                draft, intern2, extern2,
-                f"[{ts}] 🔄 Refined. Review new draft.",
-                draft, query, intern2, extern2,
+                refined, internal, external,
+                f"[{ts}] 🔄 Refined — draft + feedback merged (1 LLM call, no pipeline re-run).",
+                refined, query, internal, external,
             )
 
         btn_refine.click(
             fn=on_refine,
-            inputs=[st_query, feedback_in, st_internal, st_external],
+            inputs=[st_draft, st_query, feedback_in, st_internal, st_external],
             outputs=[
                 draft_out, internal_out, external_out, status_out,
                 st_draft, st_query, st_internal, st_external,

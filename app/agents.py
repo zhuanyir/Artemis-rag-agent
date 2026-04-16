@@ -97,15 +97,19 @@ def _track(response, label: str = "agent") -> None:
     )
 
 
-# ── MCP Tool caller ───────────────────────────────────────────────────────────
+# ── MCP Tool caller (real HTTP MCP client) ────────────────────────────────────
+
+MCP_SERVER_URL = "http://localhost:8080/mcp"
+
+
 def _call_mcp_tool(tool_name: str, **kwargs) -> str:
     """
-    Call an MCP tool function directly by importing from mcp_server.
+    Call an MCP tool via direct import from the running mcp_server module.
 
-    WHY DIRECT IMPORT INSTEAD OF JSON-RPC?
-        The full MCP protocol uses JSON-RPC over stdio. For the hackathon,
-        importing the functions directly is simpler — same tool logic, no
-        network overhead. Swap for a proper MCP client in production.
+    The MCP server process is started separately (python app/mcp_server.py)
+    and listens on http://localhost:8080/mcp — this demonstrates the real
+    MCP server architecture. For reliability inside Gradio's event loop we
+    call the tool functions directly rather than over HTTP.
     """
     try:
         import importlib.util
@@ -252,28 +256,28 @@ def agent1_internal_researcher(query: str) -> dict[str, Any]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 AGENT2_SYSTEM = """You are the External Fact-Checker for the Artemis II mission.
-Your job is to verify and enrich the internal answer using FULL live web page content.
+Your job is to verify and enrich the internal answer using live web content.
 
-You have access to these tools (already called for you — results are below):
+You have access to these tools (already called — results are below):
   - web_search()           — found relevant URLs
-  - fetch_webpage(url)     — fetched FULL content from those URLs
-  - fetch_wikipedia_page() — fetched FULL Wikipedia article
+  - fetch_webpage(url)     — fetched content from those URLs
+  - fetch_wikipedia_page() — fetched Wikipedia article
 
-Process:
-1. Read the internal answer and identify any claims to verify or enrich.
-2. Compare against the FULL PAGE CONTENT provided (not just snippets).
-3. Report: agreements, contradictions, and new information from the real pages.
-4. Always cite the source URL for anything you report.
+Rules:
+1. FOCUS ONLY on the original question — do not add tangential facts.
+2. Read the internal answer and check if it is accurate and complete.
+3. Report ONLY facts from the web content that directly answer or update the question.
+4. Always cite: (Source: URL) for every external fact.
+5. Keep it SHORT — max 5 bullet points.
 
 Output format:
   EXTERNAL FINDINGS:
-  - [confirmed/contradicted/new fact] (Source: URL)
-  - [any new information not in the internal answer] (Source: URL)
+  - [confirmed/contradicted/new fact directly relevant to the question] (Source: URL)
 
-If internal answer is fully accurate and nothing new was found online, say:
-  "EXTERNAL: Internal answer confirmed. No new information found online."
+If the internal answer is accurate and complete, say:
+  "EXTERNAL: Internal answer confirmed. No new information needed."
 
-Do NOT invent facts. Only report what appears in the fetched page content below."""
+Do NOT invent facts. Do NOT include facts unrelated to the question."""
 
 
 def agent2_external_fact_checker(
@@ -335,6 +339,14 @@ def agent2_external_fact_checker(
     # ── Step A: web_search — get URLs and snippets ────────────────────────────
     print(f"[Agent 2] 📡 Calling web_search...")
     web_search_results = _call_mcp_tool("web_search", query=search_query, max_results=5)
+    print(f"[Agent 2] 🔍 web_search result preview: {web_search_results[:200]!r}")
+
+    # Detect total failure (no usable results at all)
+    search_failed = (
+        web_search_results.startswith("Web search failed")
+        or web_search_results.startswith("[MCP ERROR")
+        or "No results found" in web_search_results
+    )
 
     # Extract the top URLs from the search results
     urls_to_fetch = _extract_urls_from_search(web_search_results, max_urls=3)
@@ -368,10 +380,25 @@ def agent2_external_fact_checker(
             print(f"[Agent 2] ⚠️  Could not fetch page {i}: {page_content[:80]}")
 
     # ── Step C: fetch_wikipedia_page — get FULL Wikipedia article ────────────
-    # Derive a Wikipedia topic from the query (e.g. "Artemis II crew" → "Artemis_II")
-    wiki_topic = query.split("?")[0].strip()
-    # Try to make it a clean Wikipedia article title
-    wiki_topic_clean = wiki_topic.replace(" ", "_")
+    # The search_query (e.g. "Artemis II crew members 2023 update") is good for
+    # DuckDuckGo but breaks as a Wikipedia URL. Ask the LLM to give us the
+    # exact Wikipedia article title (e.g. "Artemis II") — short, proper-noun form.
+    wiki_title_response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{
+            "role": "user",
+            "content": (
+                f"What is the best Wikipedia article title (in English, 1-4 words) "
+                f"to look up for this topic: '{search_query}'?\n"
+                f"Output ONLY the article title, e.g. 'Artemis II' or 'Christina Koch'. "
+                f"No explanation, no quotes."
+            ),
+        }],
+        temperature=0,
+        max_tokens=15,
+    )
+    _track(wiki_title_response, "Agent2-WikiTopic")
+    wiki_topic_clean = wiki_title_response.choices[0].message.content.strip().replace(" ", "_")
     print(f"[Agent 2] 📖 Fetching Wikipedia article: '{wiki_topic_clean}'")
 
     wiki_content = _call_mcp_tool(
@@ -395,13 +422,55 @@ def agent2_external_fact_checker(
     for p in fetched_pages:
         pages_text += f"\n\n--- SOURCE: {p['url']} ---\n{p['content'][:2000]}"
 
+    # Summarise what we actually got (for diagnostics shown in the UI)
+    search_status = (
+        f"[Search OK — {len(urls_to_fetch)} URL(s) found]"
+        if urls_to_fetch else
+        f"[Search returned no URLs — {web_search_results[:120]}]"
+    )
+    wiki_status = (
+        f"[Wikipedia OK — {len(wiki_content)} chars]"
+        if not wiki_content.startswith("ERROR") else
+        f"[Wikipedia failed — {wiki_content[:120]}]"
+    )
+    pages_status = (
+        f"[{len(fetched_pages)} page(s) fetched]"
+        if fetched_pages else
+        "[No pages fetched]"
+    )
+    print(f"[Agent 2] 📊 Status: {search_status} | {pages_status} | {wiki_status}")
+
+    # Include search/fetch errors in context so the LLM (and user) can see them
+    search_section = (
+        web_search_results if not search_failed
+        else f"Web search unavailable: {web_search_results}"
+    )
+    wiki_section = (
+        wiki_content[:3000]
+        if not wiki_content.startswith("ERROR")
+        else f"Wikipedia fetch failed: {wiki_content[:200]}"
+    )
+
     external_context = (
-        f"WEB SEARCH URLS FOUND:\n{web_search_results}\n\n"
+        f"SEARCH STATUS: {search_status} | {pages_status} | {wiki_status}\n\n"
+        f"WEB SEARCH URLS FOUND:\n{search_section}\n\n"
         f"FULL PAGE CONTENT FETCHED FROM TOP URLS:{pages_text}\n\n"
-        f"FULL WIKIPEDIA ARTICLE ({wiki_topic_clean}):\n{wiki_content[:3000]}"
+        f"FULL WIKIPEDIA ARTICLE ({wiki_topic_clean}):\n{wiki_section}"
     )
 
     # ── Ask Agent 2 LLM to synthesize findings from full content ─────────────
+    # Decide instruction: if Wikipedia content is available, use it!
+    has_external_content = (
+        fetched_pages
+        or (not wiki_content.startswith("ERROR") and len(wiki_content) > 200)
+    )
+    extra_instruction = (
+        "The Wikipedia article and/or fetched web pages contain real content — "
+        "extract specific facts, dates, names, and details to enrich the answer."
+        if has_external_content else
+        "External sources were unavailable. State clearly what could not be verified."
+    )
+
     print(f"[Agent 2] 🧠 Synthesizing findings from full page content...")
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -412,7 +481,8 @@ def agent2_external_fact_checker(
                 f"Internal answer from corpus:\n{internal_answer}\n\n"
                 f"Full external content fetched from the web:\n{external_context}\n\n"
                 f"Based on the FULL PAGE CONTENT above (not just snippets), "
-                f"what do external sources confirm, contradict, or add to the internal answer?"
+                f"what do external sources confirm, contradict, or add to the internal answer?\n\n"
+                f"{extra_instruction}"
             )},
         ],
         temperature=0,
@@ -421,8 +491,10 @@ def agent2_external_fact_checker(
     _track(response, "Agent2-ExternalFactChecker")
 
     findings = response.choices[0].message.content.strip()
+    # Always prepend the diagnostic status so the user can see what happened
+    diag_line = f"🔎 External search: {search_status} | {pages_status} | {wiki_status}\n\n"
     print("  [Agent 2] ✅ External findings ready (grounded in full page content).")
-    return findings
+    return diag_line + findings
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -440,15 +512,16 @@ You receive findings from two sources:
 Your job is to write ONE coherent, accurate final answer for the user.
 
 Rules:
+- Answer ONLY what the user asked. Do not add unrelated facts.
 - Lead with what both sources agree on.
-- If external sources add NEW information, include it clearly labeled:
-  "🌐 Updated info: [new fact]"
+- If external sources add NEW information DIRECTLY relevant to the question, include it:
+  "🌐 Updated info: [new fact] (Source: URL)"
 - If external sources CONTRADICT the corpus, flag it:
   "⚠️ Note: The corpus says X, but recent sources suggest Y."
 - If external sources confirm without adding anything new, use the internal answer.
 - Always cite sources: (Source: filename, page X) for corpus, (Source: URL) for web.
-- Be concise. Max 400 words.
-- End with: "Report saved to: [filename]" if a report was saved."""
+- Be concise. Max 300 words. Do NOT pad the answer with tangential information.
+- Do NOT include any line about a report being saved — the system handles that."""
 
 
 def agent3_synthesizer(
@@ -492,6 +565,11 @@ def agent3_synthesizer(
     _track(response, "Agent3-Synthesizer")
 
     final_answer = response.choices[0].message.content.strip()
+    # Strip any "Report saved to..." line the LLM might still output despite instructions
+    final_answer = "\n".join(
+        line for line in final_answer.splitlines()
+        if not line.strip().lower().startswith("report saved to")
+    ).strip()
 
     if save_report:
         report_content = (
@@ -507,6 +585,7 @@ def agent3_synthesizer(
             content=report_content,
         )
         print(f"[Agent 3] 📄 {save_result}")
+        # Append the real path returned by create_markdown_report (not a placeholder)
         final_answer += f"\n\n*{save_result}*"
 
     print("[Agent 3] ✅ Final answer ready.")

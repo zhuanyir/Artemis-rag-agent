@@ -212,3 +212,250 @@
 [2026-04-16 13:07:01] 💤 No new emails. Next check in 60s.
 [2026-04-16 13:07:02] Found 0 new email(s) with prefix '[ARTEMIS]'.
 [2026-04-16 13:07:03] 💤 No new emails. Next check in 60s.
+[2026-04-16 15:59:28] ✅ RAG pipeline loaded successfully.
+[2026-04-16 15:59:28] 🚀 Email Bridge started. Polling every 60s.
+[2026-04-16 15:59:28] Email bridge running as background thread.
+[2026-04-16 15:59:28]    Inbox  : btechit211398@smvec.ac.in
+[2026-04-16 15:59:28]    Trigger: emails with subject containing '[ARTEMIS]'
+[2026-04-16 15:59:28]    Auth   : Gmail App Password (IMAP SSL + SMTP STARTTLS)
+[2026-04-16 15:59:28]    RAG    : READY ✅
+[2026-04-16 15:59:28]    Log    : C:\Users\OEM\Team-survivors\email_bridge.log
+[2026-04-16 15:59:29] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 15:59:29] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:00:30] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:00:30] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:01:31] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:01:31] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:02:32] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:02:32] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:03:33] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:03:33] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:04:34] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:04:34] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:05:36] Found 1 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:05:37] Processing email from Vrikshikha Velan <vrikshikha2407@gmail.com> | Subject: [ARTEMIS] When will Artemis II launch?
+[2026-04-16 16:05:37]    Query: 'When will Artemis II launch?...'
+[2026-04-16 16:05:42] ✅ Reply sent to vrikshikha2407@gmail.com
+[2026-04-16 16:06:43] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:06:44] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:07:45] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:07:45] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:08:46] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:08:46] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:09:47] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:09:47] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:10:48] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:10:48] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:11:49] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:11:49] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:12:49] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:12:50] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:13:51] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:13:51] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:14:51] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:14:52] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:15:52] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:15:52] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:16:53] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:16:53] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:17:27] ✅ RAG pipeline loaded successfully.
+[2026-04-16 16:17:27] 🚀 Email Bridge started. Polling every 60s.
+[2026-04-16 16:17:27] Email bridge running as background thread.
+[2026-04-16 16:17:27]    Inbox  : btechit211398@smvec.ac.in
+[2026-04-16 16:17:27]    Trigger: emails with subject containing '[ARTEMIS]'
+[2026-04-16 16:17:27]    Auth   : Gmail App Password (IMAP SSL + SMTP STARTTLS)
+[2026-04-16 16:17:27]    RAG    : READY ✅
+[2026-04-16 16:17:27]    Log    : C:\Users\OEM\Team-survivors\email_bridge.log
+[2026-04-16 16:17:28] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:17:28] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:18:29] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:18:29] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:19:30] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:19:30] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:20:31] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:20:31] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:21:32] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:21:32] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:22:33] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:22:33] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:23:34] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:23:34] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:24:35] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:24:36] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:25:37] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:25:37] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:26:37] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:26:38] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:27:38] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:27:38] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:28:40] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:28:40] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:29:41] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:29:41] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:30:42] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:30:42] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:32:31] ✅ RAG pipeline loaded successfully.
+[2026-04-16 16:32:31] 🚀 Email Bridge started. Polling every 60s.
+[2026-04-16 16:32:31] Email bridge running as background thread.
+[2026-04-16 16:32:31]    Inbox  : btechit211398@smvec.ac.in
+[2026-04-16 16:32:31]    Trigger: emails with subject containing '[ARTEMIS]'
+[2026-04-16 16:32:31]    Auth   : Gmail App Password (IMAP SSL + SMTP STARTTLS)
+[2026-04-16 16:32:31]    RAG    : READY ✅
+[2026-04-16 16:32:31]    Log    : C:\Users\OEM\Team-survivors\email_bridge.log
+[2026-04-16 16:32:32] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:32:32] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:33:33] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:33:33] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:34:35] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:34:35] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:35:36] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:35:36] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:36:38] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:36:38] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:37:39] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:37:39] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:38:41] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:38:41] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:39:42] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:39:52] ✅ RAG pipeline loaded successfully.
+[2026-04-16 16:39:52] 🚀 Email Bridge started. Polling every 60s.
+[2026-04-16 16:39:52] Email bridge running as background thread.
+[2026-04-16 16:39:52]    Inbox  : btechit211398@smvec.ac.in
+[2026-04-16 16:39:52]    Trigger: emails with subject containing '[ARTEMIS]'
+[2026-04-16 16:39:52]    Auth   : Gmail App Password (IMAP SSL + SMTP STARTTLS)
+[2026-04-16 16:39:52]    RAG    : READY ✅
+[2026-04-16 16:39:52]    Log    : C:\Users\OEM\Team-survivors\email_bridge.log
+[2026-04-16 16:39:53] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:39:53] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:40:54] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:40:54] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:41:55] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:41:55] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:42:56] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:42:56] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:43:57] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:43:57] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:44:57] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:44:58] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:46:00] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:46:00] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:47:01] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:47:01] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:47:41] ✅ RAG pipeline loaded successfully.
+[2026-04-16 16:47:41] 🚀 Email Bridge started. Polling every 60s.
+[2026-04-16 16:47:41] Email bridge running as background thread.
+[2026-04-16 16:47:41]    Inbox  : btechit211398@smvec.ac.in
+[2026-04-16 16:47:41]    Trigger: emails with subject containing '[ARTEMIS]'
+[2026-04-16 16:47:41]    Auth   : Gmail App Password (IMAP SSL + SMTP STARTTLS)
+[2026-04-16 16:47:41]    RAG    : READY ✅
+[2026-04-16 16:47:41]    Log    : C:\Users\OEM\Team-survivors\email_bridge.log
+[2026-04-16 16:47:42] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:47:42] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:48:43] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:48:43] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:49:44] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:49:44] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:50:45] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:50:45] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:51:46] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:51:46] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:52:47] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:52:47] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:53:48] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:53:48] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:54:49] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:54:49] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:55:41] ✅ RAG pipeline loaded successfully.
+[2026-04-16 16:55:41] 🚀 Email Bridge started. Polling every 60s.
+[2026-04-16 16:55:41] Email bridge running as background thread.
+[2026-04-16 16:55:41]    Inbox  : btechit211398@smvec.ac.in
+[2026-04-16 16:55:41]    Trigger: emails with subject containing '[ARTEMIS]'
+[2026-04-16 16:55:41]    Auth   : Gmail App Password (IMAP SSL + SMTP STARTTLS)
+[2026-04-16 16:55:41]    RAG    : READY ✅
+[2026-04-16 16:55:41]    Log    : C:\Users\OEM\Team-survivors\email_bridge.log
+[2026-04-16 16:55:42] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:55:42] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:56:43] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:56:43] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:57:44] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:57:44] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:58:45] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:58:45] 💤 No new emails. Next check in 60s.
+[2026-04-16 16:59:46] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 16:59:47] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:00:48] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:00:48] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:01:48] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:01:49] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:02:49] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:02:50] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:03:50] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:03:51] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:04:51] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:04:51] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:05:53] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:05:53] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:07:10] ✅ RAG pipeline loaded successfully.
+[2026-04-16 17:07:10] 🚀 Email Bridge started. Polling every 60s.
+[2026-04-16 17:07:10] Email bridge running as background thread.
+[2026-04-16 17:07:10]    Inbox  : btechit211398@smvec.ac.in
+[2026-04-16 17:07:10]    Trigger: emails with subject containing '[ARTEMIS]'
+[2026-04-16 17:07:10]    Auth   : Gmail App Password (IMAP SSL + SMTP STARTTLS)
+[2026-04-16 17:07:10]    RAG    : READY ✅
+[2026-04-16 17:07:10]    Log    : C:\Users\OEM\Team-survivors\email_bridge.log
+[2026-04-16 17:07:10] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:07:11] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:08:11] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:08:11] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:09:12] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:09:13] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:10:14] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:10:14] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:11:15] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:11:15] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:12:16] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:12:16] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:13:18] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:13:18] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:14:19] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:14:19] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:15:20] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:15:20] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:15:54] ✅ RAG pipeline loaded successfully.
+[2026-04-16 17:15:54] 🚀 Email Bridge started. Polling every 60s.
+[2026-04-16 17:15:54] Email bridge running as background thread.
+[2026-04-16 17:15:54]    Inbox  : btechit211398@smvec.ac.in
+[2026-04-16 17:15:54]    Trigger: emails with subject containing '[ARTEMIS]'
+[2026-04-16 17:15:54]    Auth   : Gmail App Password (IMAP SSL + SMTP STARTTLS)
+[2026-04-16 17:15:54]    RAG    : READY ✅
+[2026-04-16 17:15:54]    Log    : C:\Users\OEM\Team-survivors\email_bridge.log
+[2026-04-16 17:15:55] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:15:55] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:16:56] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:16:56] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:17:57] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:17:57] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:18:58] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:18:58] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:19:59] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:19:59] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:21:00] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:21:00] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:22:00] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:22:01] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:23:01] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:23:01] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:24:04] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:24:04] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:25:05] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:25:05] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:26:05] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:26:06] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:27:06] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:27:07] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:28:07] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:28:07] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:29:08] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:29:08] 💤 No new emails. Next check in 60s.
+[2026-04-16 17:30:09] Found 0 new email(s) with prefix '[ARTEMIS]'.
+[2026-04-16 17:30:09] 💤 No new emails. Next check in 60s.
