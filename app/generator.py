@@ -172,7 +172,7 @@ def build_context(retrieved_chunks: list[dict]) -> str:
     Format retrieved chunks into a context string for the prompt.
     """
     return "\n\n".join(
-        f"[Source: {chunk['source']} p.{chunk['page']}]\n{chunk['text']}"
+        f"[Source: {chunk['document_title']} p.{chunk['page']}]\n{chunk['text']}"
         for chunk in retrieved_chunks
     )
 
