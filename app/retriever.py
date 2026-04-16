@@ -89,7 +89,8 @@ def heuristic_rerank(query: str, results: list[dict]) -> list[dict]:
 
     for item in results:
         text   = item.get("text", "").lower()
-        source = str(item.get("source", "")).lower()
+        # CHANGED: 'source' → 'document_title'
+        doc_title = str(item.get("document_title", "")).lower()
 
         bonus = 0.0
         for term in positive_terms:
@@ -98,9 +99,10 @@ def heuristic_rerank(query: str, results: list[dict]) -> list[dict]:
         for term in negative_terms:
             if term in text:
                 bonus -= 0.12
-        if "press kit" in source:
+        # CHANGED: Check document_title instead of source
+        if "press kit" in doc_title:
             bonus += 0.03
-        if "reference guide" in source:
+        if "reference guide" in doc_title:
             bonus += 0.03
 
         new_item = dict(item)
@@ -170,10 +172,11 @@ def retrieve(
         print(f"[retrieve] Candidates: {len(candidates)} → returning top {final_k}")
         print("=" * 80)
         for rank, item in enumerate(results, start=1):
-            print(f"\n  [{rank}] chunk_id={item.get('chunk_id')} | "
+            # CHANGED: 'chunk_id' → 'id', 'source' → 'document_title'
+            print(f"\n  [{rank}] id={item.get('id')} | "
                   f"score={item.get('score')} | "
                   f"rerank_score={item.get('rerank_score', 'N/A')} | "
-                  f"source={item.get('source')} p.{item.get('page')}")
+                  f"document={item.get('document_title')} p.{item.get('page')}")
             print(f"       {item.get('text', '')[:200]}")
 
     return results
