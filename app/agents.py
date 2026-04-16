@@ -61,6 +61,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 from openai import OpenAI
+from visualizer_agent import maybe_visualize
 
 load_dotenv()
 
@@ -509,7 +510,11 @@ def agent3_synthesizer(
         final_answer += f"\n\n*{save_result}*"
 
     print("[Agent 3] ✅ Final answer ready.")
+    viz = maybe_visualize(query, final_answer)
+    if viz:
+        print(f"Visual saved: {viz['path']}")
     return final_answer
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════

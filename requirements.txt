@@ -11,3 +11,4 @@ duckduckgo-search
 requests
 beautifulsoup4
 wikipedia-api
+matplotlib

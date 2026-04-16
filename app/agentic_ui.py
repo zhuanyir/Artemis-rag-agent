@@ -21,8 +21,13 @@ import sys
 import tiktoken
 from datetime import datetime
 from pathlib import Path
+import gradio as gr
+from visualizer_agent import maybe_visualize
 
 import gradio as gr
+
+from email_bridge import start_in_background
+_stop = start_in_background()   
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 APP_DIR     = Path(__file__).resolve().parent
@@ -780,6 +785,10 @@ def build_ui() -> gr.Blocks:
                 save_note = "\n\n*(Demo mode — report not saved.)*"
 
             ts = datetime.now().strftime("%H:%M:%S")
+            viz = maybe_visualize(query, draft)
+            if viz and viz["type"] == "chart":
+                gr.Image(viz["path"])  # add an Image component to Tab 1
+                pass
             return draft + save_note, f"[{ts}] ✅ Approved & saved."
 
         btn_approve.click(
