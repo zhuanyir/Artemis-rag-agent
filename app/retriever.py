@@ -78,6 +78,10 @@ def load_index_and_chunks() -> tuple[faiss.Index, list[dict]]:
             corpus = json.load(f)
 
         for chunk in chunks:
+            # New-format chunks already have source/page — don't overwrite them
+            if chunk.get("source"):
+                chunk.setdefault("page", 0)
+                continue
             doc_id = chunk.get("document_id", -1)
             if 0 <= doc_id < len(corpus):
                 chunk["source"] = corpus[doc_id].get("source", "unknown")

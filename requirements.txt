@@ -6,3 +6,9 @@ numpy
 gradio
 pymupdf
 rank_bm25
+fastmcp
+duckduckgo-search
+requests
+beautifulsoup4
+wikipedia-api
+matplotlib
