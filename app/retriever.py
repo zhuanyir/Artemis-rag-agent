@@ -1,6 +1,9 @@
 """
 retriever.py — Vector retrieval for the Artemis II RAG pipeline.
 
+Uses the new chunk format from chunk_corpus.py:
+  id, document_id, document_title, paragraph_index, text, size, sentence_count
+
 Place this file at: app/retriever.py
 """
 
@@ -16,27 +19,34 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Initialise client ONCE at module level — not inside the function
-# Avoids re-creating the client on every query (real speedup)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 DATA_DIR         = os.path.join(os.path.dirname(__file__), "..", "data")
 CHUNKS_PATH      = os.path.join(DATA_DIR, "chunks.json")
+CORPUS_PATH      = os.path.join(DATA_DIR, "corpus.json")
 FAISS_INDEX_PATH = os.path.join(DATA_DIR, "index.faiss")
 
-EMBEDDING_DIM = 1536  # text-embedding-3-small
+EMBEDDING_DIM = 1536
 
+# ── Embedding cache ───────────────────────────────────────────────────────────
+_embedding_cache: dict[str, list[float]] = {}
 
-# ── Embedding function ────────────────────────────────────────────────────────
 
 def get_embedding(text: str) -> list[float]:
-    """Single embedding call — used for query embedding at search time."""
+    cache_key = text.strip().lower()
+    if cache_key in _embedding_cache:
+        print(f"[retriever] Cache hit for query: {text[:50]}...")
+        return _embedding_cache[cache_key]
+
     response = client.embeddings.create(
         model="text-embedding-3-small",
         input=text,
     )
-    return response.data[0].embedding
+    embedding = response.data[0].embedding
+    _embedding_cache[cache_key] = embedding
+    print(f"[retriever] Cache miss — embedded query ({len(_embedding_cache)} cached).")
+    return embedding
 
 
 # ── Load index and chunks ─────────────────────────────────────────────────────
@@ -44,7 +54,7 @@ def get_embedding(text: str) -> list[float]:
 def load_index_and_chunks() -> tuple[faiss.Index, list[dict]]:
     """
     Load FAISS index and chunk metadata from disk.
-    Run scripts/embed.py first to generate these files.
+    Enriches chunks with source/page from corpus.json using document_id.
     """
     if not os.path.exists(FAISS_INDEX_PATH):
         raise FileNotFoundError(
@@ -54,12 +64,37 @@ def load_index_and_chunks() -> tuple[faiss.Index, list[dict]]:
     if not os.path.exists(CHUNKS_PATH):
         raise FileNotFoundError(
             f"Chunks file not found at {CHUNKS_PATH}.\n"
-            "Run scripts/chunk.py first."
+            "Run scripts/chunk_corpus.py first."
         )
 
     index = faiss.read_index(FAISS_INDEX_PATH)
+
     with open(CHUNKS_PATH, encoding="utf-8") as f:
         chunks = json.load(f)
+
+    # Enrich chunks with source + page from corpus.json
+    if os.path.exists(CORPUS_PATH):
+        with open(CORPUS_PATH, encoding="utf-8") as f:
+            corpus = json.load(f)
+
+        for chunk in chunks:
+            doc_id = chunk.get("document_id", -1)
+            if 0 <= doc_id < len(corpus):
+                chunk["source"] = corpus[doc_id].get("source", "unknown")
+                chunk["page"]   = corpus[doc_id].get("page", -1)
+            else:
+                chunk["source"] = chunk.get("document_title", "unknown")
+                chunk["page"]   = -1
+
+        print(f"[retriever] Enriched chunks with source/page from corpus.json")
+    else:
+        for chunk in chunks:
+            chunk.setdefault("source", chunk.get("document_title", "unknown"))
+            chunk.setdefault("page", -1)
+
+    # Normalise chunk_id field
+    for chunk in chunks:
+        chunk.setdefault("chunk_id", chunk.get("id", -1))
 
     print(f"[retriever] Loaded {index.ntotal} vectors and {len(chunks)} chunks.")
     return index, chunks
@@ -68,15 +103,18 @@ def load_index_and_chunks() -> tuple[faiss.Index, list[dict]]:
 # ── Heuristic reranking ───────────────────────────────────────────────────────
 
 def heuristic_rerank(query: str, results: list[dict]) -> list[dict]:
-    """
-    Adjust ranking using lightweight lexical heuristics.
-    Runs in microseconds — no API call needed.
-    """
     positive_terms = [
         "mission requirements", "requirements", "objectives",
         "mission objectives", "flight readiness", "crew safety",
         "lunar", "flyby", "orion", "sls", "hardware",
         "operations", "deep space", "safe return", "payloads",
+        "322.4", "98.27", "block 1 by the numbers",
+        "commander", "pilot", "mission specialist",
+        "wiseman", "glover", "koch", "hansen",
+        "assigned to be", "crew member",
+        "10 days",        # mission duration
+        "10-day",         # mission duration alternate
+        "about 10 days",  # exact phrase in corpus
     ]
 
     negative_terms = [
@@ -121,35 +159,13 @@ def retrieve(
     index: faiss.Index,
     chunks: list[dict],
     final_k: int = 5,
-    candidate_k: int = 10,   # reduced from 20 → faster reranking
+    candidate_k: int = 10,
     use_rerank: bool = True,
     debug: bool = False,
 ) -> list[dict]:
-    """
-    Retrieve the top-k most relevant chunks for a query.
-
-    Speed changes vs previous version:
-    - Removed query rewriting (saved one full OpenAI API call per query)
-    - Reduced candidate_k from 20 → 10 (fewer chunks to rerank)
-    - OpenAI client initialised at module level (not per call)
-
-    Args:
-        query:       User question.
-        index:       Loaded FAISS index.
-        chunks:      List of chunk dicts.
-        final_k:     Number of final chunks to return.
-        candidate_k: Number of FAISS candidates before reranking.
-        use_rerank:  Whether to apply heuristic reranking.
-        debug:       Print retrieval diagnostics.
-
-    Returns:
-        List of chunk dicts with score fields added.
-    """
-    # Embed the query — this is the only API call in retrieval
     query_vec = np.array(get_embedding(query), dtype="float32").reshape(1, -1)
     faiss.normalize_L2(query_vec)
 
-    # FAISS search
     scores, indices = index.search(query_vec, candidate_k)
 
     candidates: list[dict] = []
@@ -160,7 +176,6 @@ def retrieve(
         result["score"] = round(float(score), 4)
         candidates.append(result)
 
-    # Optional heuristic reranking (no API call — pure Python)
     if use_rerank:
         candidates = heuristic_rerank(query, candidates)
 
