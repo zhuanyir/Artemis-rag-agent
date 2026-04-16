@@ -10,6 +10,8 @@ Features:
 - Export conversation as .txt
 - Built-in Like/Dislike feedback (native Gradio 6.x feature)
 
+Wires together retriever.py and generator.py into a chat interface.
+
 Usage:
     python app/app.py
 
@@ -23,10 +25,13 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+import os
+import sys
 from typing import Any
 
 import gradio as gr
 
+# Make sure app/ can import from the same directory
 sys.path.insert(0, os.path.dirname(__file__))
 
 from retriever import load_index_and_chunks, retrieve
@@ -40,6 +45,15 @@ COST_FILE    = ROOT / "cost_tracker.json"
 # ── Config ────────────────────────────────────────────────────────────────────
 DEBUG_HISTORY        = False  # set True to debug history format in terminal
 CONFIDENCE_THRESHOLD = 0.35
+
+from retriever import load_index_and_chunks, retrieve
+from generator import generate_answer
+
+# ── Debug toggle ──────────────────────────────────────────────────────────────
+
+DEBUG_HISTORY = True
+
+# ── Load index and chunks once at startup ─────────────────────────────────────
 
 # ── Load index and chunks once at startup ─────────────────────────────────────
 print("[app] Loading FAISS index and chunks...")
@@ -297,6 +311,61 @@ def build_ui() -> gr.Blocks:
                     fn=lambda: get_analytics_text(),
                     outputs=analytics_display,
                 )
+    # 2. Generate answer — pass history so follow-ups work
+    answer = generate_answer(message, retrieved, history)
+
+    # 3. Append source citations block below the answer
+    if retrieved:
+        sources_lines = []
+        seen = set()
+
+        for chunk in retrieved:
+            # CHANGED: 'source' → 'document_title'
+            # CHANGED: 'chunk_id' → 'id'
+            key = f"{chunk['document_title']} — page {chunk['page']}"
+
+            if key not in seen:
+                seen.add(key)
+                sources_lines.append(
+                    f"• {key}  (id: {chunk.get('id', 'N/A')}, "
+                    f"score: {chunk.get('score', 'N/A')})"
+                )
+
+        sources_block = "\n\n---\n**Sources retrieved:**\n" + "\n".join(sources_lines)
+        answer += sources_block
+
+    return answer
+
+
+# ── Gradio UI ─────────────────────────────────────────────────────────────────
+
+def build_ui() -> gr.Blocks:
+    with gr.Blocks(title="Artemis II RAG") as demo:
+        gr.Markdown(
+            """
+            # 🚀 Artemis II Knowledge Assistant
+
+            Ask any question about the Artemis II mission, SLS rocket, or Orion spacecraft.
+
+            Answers are drawn exclusively from the official NASA documents in our corpus.
+            """
+        )
+
+        gr.ChatInterface(
+            fn=chat,
+            chatbot=gr.Chatbot(height=500),
+            textbox=gr.Textbox(
+                placeholder="e.g. Who are the Artemis II crew members?",
+                container=False,
+            ),
+            examples=[
+                "Who are the four crew members of Artemis II?",
+                "What is the height of the SLS rocket?",
+                "How long does the Artemis II mission last?",
+                "What percentage of thrust do the solid rocket boosters provide?",
+                "What happens if the answer is not in the documents?",
+            ],
+        )
 
     return demo
 
