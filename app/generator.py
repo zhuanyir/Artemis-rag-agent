@@ -158,13 +158,10 @@ def is_yes_no_question(query: str) -> bool:
 
 def build_context(retrieved_chunks: list[dict]) -> str:
     """Format retrieved chunks into a context string for the prompt."""
-    parts = []
-    for chunk in retrieved_chunks:
-        source = chunk.get("source") or chunk.get("document_title") or "unknown"
-        page   = chunk.get("page", chunk.get("paragraph_index", "?"))
-        text   = chunk.get("text", "")
-        parts.append(f"[Source: {source} p.{page}]\n{text}")
-    return "\n\n".join(parts)
+    return "\n\n".join(
+        f"[Source: {chunk['document_title']} p.{chunk['page']}]\n{chunk['text']}"
+        for chunk in retrieved_chunks
+    )
 
 
 # ── History conversion ────────────────────────────────────────────────────────

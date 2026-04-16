@@ -1,37 +1,34 @@
 #!/usr/bin/env python3
 """
 Chunk corpus for Artemis II Knowledge Navigator
-Optimized for larger chunks (target 500-800 characters)
+Splits documents into chunks for embedding generation
 """
 
 import os
 import re
 import json
-from typing import List, Dict, Any
 from pathlib import Path
 
 def safe_text(value):
-    """安全地将输入转换为UTF-8字符串"""
+    """Safely convert input to UTF-8 string"""
     if value is None:
         return ""
     
     if not isinstance(value, str):
         try:
             value = str(value)
-        except Exception as e:
-            print(f"Warning: Could not convert {type(value)} to string: {e}")
+        except Exception:
             return ""
     
     try:
         value = value.encode("utf-8", errors="ignore").decode("utf-8", errors="ignore")
-    except Exception as e:
-        print(f"Warning: Could not normalize text: {e}")
+    except Exception:
         return ""
     
     return value
 
 def normalize_text(text):
-    """Normalize text by removing extra whitespace and special characters"""
+    """Normalize text by removing extra whitespace"""
     if text is None:
         return ""
     
@@ -42,55 +39,60 @@ def normalize_text(text):
             return ""
     
     text = safe_text(text)
-    
     # Remove extra whitespace
     text = re.sub(r'\s+', ' ', text)
-    
-    # Keep basic punctuation and alphanumeric characters
-    text = re.sub(r'[^\w\s\.\,\!\?\-\:\;\(\)\[\]\{\}]', '', text)
-    
     # Strip leading/trailing whitespace
     text = text.strip()
     
     return text
 
-def get_document_content(document):
-    """Extract content from document, trying different possible field names"""
-    content_fields = ['content', 'text', 'body', 'article', 'description', 'full_text']
-    
-    for field in content_fields:
-        if field in document and document[field]:
-            content = document[field]
-            if isinstance(content, str) and content.strip():
-                return content
-    
-    for key, value in document.items():
-        if isinstance(value, str) and len(value) > 100:
-            return value
-    
-    return ""
-
 def get_document_title(document):
-    """Extract title from document"""
-    title_fields = ['title', 'name', 'heading', 'header', 'subject']
+    """Extract readable title from document - uses 'source' field as primary"""
+    # Priority 1: Use 'source' filename (e.g., "a2-reference-guide-012825.pdf")
+    if 'source' in document and document['source']:
+        source = document['source']
+        # Remove file extension
+        title = source.replace('.pdf', '').replace('.txt', '').replace('.md', '')
+        # Convert hyphens and underscores to spaces
+        title = title.replace('-', ' ').replace('_', ' ')
+        # Convert to title case
+        title = title.title()
+        return safe_text(title)
     
-    for field in title_fields:
-        if field in document and document[field]:
-            title = document[field]
-            if isinstance(title, str) and title.strip():
-                return safe_text(title)
+    # Priority 2: Use 'title' field if available
+    if 'title' in document and document['title']:
+        return safe_text(document['title'])
     
     return "Untitled"
 
+def get_document_content(document):
+    """Extract content from document - uses 'text' field as primary"""
+    # Priority 1: Use 'text' field
+    if 'text' in document and document['text']:
+        content = document['text']
+        if isinstance(content, str) and content.strip():
+            return content
+    
+    # Priority 2: Use 'content' field
+    if 'content' in document and document['content']:
+        content = document['content']
+        if isinstance(content, str) and content.strip():
+            return content
+    
+    return ""
+
+def get_document_page(document):
+    """Extract page number from document"""
+    if 'page' in document:
+        return document['page']
+    return None
+
 def chunk_paragraph_by_sentences(paragraph, max_chunk_size=800, min_chunk_size=300, overlap_sentences=1):
     """
-    Chunk a paragraph by sentences with improved size targeting
-    
-    Args:
-        paragraph: Paragraph text to chunk
-        max_chunk_size: Maximum characters per chunk (increased to 800)
-        min_chunk_size: Minimum characters before creating a chunk (new)
-        overlap_sentences: Number of sentences to overlap between chunks
+    Chunk a paragraph by sentences with overlap
+    - max_chunk_size: Maximum characters per chunk
+    - min_chunk_size: Minimum size before creating a chunk (for merging)
+    - overlap_sentences: Number of sentences to overlap between chunks
     """
     if paragraph is None:
         return []
@@ -101,12 +103,13 @@ def chunk_paragraph_by_sentences(paragraph, max_chunk_size=800, min_chunk_size=3
     if not paragraph.strip():
         return []
     
-    # Split into sentences
-    sentences = re.split(r'(?<=[.!?])\s+', paragraph)
+    # Split into sentences (detects .!? followed by space and capital letter)
+    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', paragraph)
     sentences = [s.strip() for s in sentences if s.strip()]
     
+    # If no sentences found, treat as one chunk
     if not sentences:
-        return []
+        return [{'text': normalize_text(paragraph), 'size': len(paragraph), 'sentence_count': 1}]
     
     chunks = []
     current_chunk = []
@@ -124,34 +127,26 @@ def chunk_paragraph_by_sentences(paragraph, max_chunk_size=800, min_chunk_size=3
         # Check if adding this sentence would exceed max size
         will_exceed = current_size + sentence_size > max_chunk_size
         
-        # Save current chunk if:
-        # 1. Adding next sentence would exceed max size AND we have some content
-        # 2. Current chunk already meets minimum size requirement
+        # Save current chunk if adding next sentence would exceed max size
         if will_exceed and current_chunk:
-            # Only save if current chunk meets minimum size
-            if current_size >= min_chunk_size:
-                chunk_text = ' '.join(current_chunk)
-                chunks.append({
-                    'text': chunk_text,
-                    'size': current_size,
-                    'sentence_count': len(current_chunk)
-                })
-                
-                # Start new chunk with overlap
-                overlap_start = max(0, len(current_chunk) - overlap_sentences)
-                current_chunk = current_chunk[overlap_start:]
-                current_size = sum(len(s) for s in current_chunk)
-            else:
-                # Current chunk is too small, keep building it
-                # (don't save yet, try to add more sentences)
-                pass
+            chunk_text = ' '.join(current_chunk)
+            chunks.append({
+                'text': chunk_text,
+                'size': current_size,
+                'sentence_count': len(current_chunk)
+            })
+            
+            # Start new chunk with overlap (carry over previous sentences)
+            overlap_start = max(0, len(current_chunk) - overlap_sentences)
+            current_chunk = current_chunk[overlap_start:]
+            current_size = sum(len(s) for s in current_chunk)
         
         # Add sentence to current chunk
         current_chunk.append(sentence)
         current_size += sentence_size
         i += 1
     
-    # Add the last chunk (even if smaller than min_chunk_size)
+    # Add the last chunk
     if current_chunk:
         chunk_text = ' '.join(current_chunk)
         chunks.append({
@@ -160,44 +155,7 @@ def chunk_paragraph_by_sentences(paragraph, max_chunk_size=800, min_chunk_size=3
             'sentence_count': len(current_chunk)
         })
     
-    # Post-process: merge very small chunks with previous/next
-    chunks = merge_small_chunks(chunks, min_chunk_size)
-    
     return chunks
-
-def merge_small_chunks(chunks, min_size=300):
-    """Merge small chunks with neighboring chunks"""
-    if len(chunks) <= 1:
-        return chunks
-    
-    merged = []
-    i = 0
-    
-    while i < len(chunks):
-        current = chunks[i]
-        
-        # If current chunk is too small and there's a next chunk
-        if current['size'] < min_size and i + 1 < len(chunks):
-            next_chunk = chunks[i + 1]
-            
-            # Merge with next chunk
-            merged_text = current['text'] + ' ' + next_chunk['text']
-            merged_size = current['size'] + next_chunk['size'] + 1  # +1 for space
-            merged_sentences = current['sentence_count'] + next_chunk['sentence_count']
-            
-            merged.append({
-                'text': merged_text,
-                'size': merged_size,
-                'sentence_count': merged_sentences
-            })
-            
-            # Skip the next chunk since it's merged
-            i += 2
-        else:
-            merged.append(current)
-            i += 1
-    
-    return merged
 
 def main():
     """Main function to chunk the corpus"""
@@ -226,12 +184,16 @@ def main():
     
     print(f"Loaded {len(corpus)} documents")
     
-    # Parameters for chunking
-    MAX_CHUNK_SIZE = 800  # Increased from 500 to 800
-    MIN_CHUNK_SIZE = 400  # Target minimum size
-    OVERLAP_SENTENCES = 1
+    # Debug: Show structure of first document
+    if corpus:
+        print(f"\nFirst document keys: {list(corpus[0].keys())}")
     
-    print(f"Chunking parameters:")
+    # Chunking parameters
+    MAX_CHUNK_SIZE = 800      # Maximum characters per chunk
+    MIN_CHUNK_SIZE = 300      # Minimum target size
+    OVERLAP_SENTENCES = 1     # Number of sentences to overlap
+    
+    print(f"\nChunking parameters:")
     print(f"  Max chunk size: {MAX_CHUNK_SIZE} characters")
     print(f"  Min chunk size: {MIN_CHUNK_SIZE} characters")
     print(f"  Overlap: {OVERLAP_SENTENCES} sentence(s)")
@@ -257,18 +219,21 @@ def main():
 
     # Process each document
     for doc_id, document in enumerate(corpus):
-        title = get_document_title(document)
-        content = get_document_content(document)
+        # Extract metadata
+        title = get_document_title(document)      # Extract title from 'source' field
+        content = get_document_content(document)  # Extract content from 'text' field
+        page = get_document_page(document)        # Extract page number
         
         if not content or not content.strip():
             continue
         
         documents_with_content += 1
         
-        if doc_id % 50 == 0:  # Progress update every 50 docs
-            print(f"Processing document {doc_id + 1}/{len(corpus)}: {title}")
+        # Progress update every 50 documents
+        if documents_with_content % 50 == 0:
+            print(f"Processing document {documents_with_content}/{len(corpus)}: {title} (Page {page})")
         
-        # Split into paragraphs
+        # Split into paragraphs (by double newlines or double line breaks)
         paragraphs = content.split('\n\n')
         
         # Process each paragraph
@@ -276,7 +241,7 @@ def main():
             if not paragraph or not paragraph.strip():
                 continue
             
-            # Chunk the paragraph with new parameters
+            # Chunk the paragraph
             para_chunks = chunk_paragraph_by_sentences(
                 paragraph, 
                 max_chunk_size=MAX_CHUNK_SIZE,
@@ -284,12 +249,14 @@ def main():
                 overlap_sentences=OVERLAP_SENTENCES
             )
             
-            # Add metadata to chunks
+            # Add metadata to each chunk
             for chunk in para_chunks:
-                chunk['id'] = chunk_id
-                chunk['document_id'] = doc_id
-                chunk['document_title'] = title
-                chunk['paragraph_index'] = para_idx
+                chunk['id'] = chunk_id                         # Unique chunk identifier
+                chunk['document_id'] = doc_id                  # Reference to original document index
+                chunk['document_title'] = title                # Readable title for display
+                chunk['page'] = page                           # KEPT: Original PDF page number
+                # REMOVED: 'paragraph_index' - not needed for retrieval
+                # REMOVED: 'source' - redundant with document_title
                 chunk_id += 1
                 all_chunks.append(chunk)
     
@@ -297,7 +264,6 @@ def main():
     print(f"Summary:")
     print(f"  Total documents: {len(corpus)}")
     print(f"  Documents with content: {documents_with_content}")
-    print(f"  Documents without content: {len(corpus) - documents_with_content}")
     print(f"  Total chunks generated: {len(all_chunks)}")
     
     if len(all_chunks) == 0:
@@ -330,24 +296,19 @@ def main():
         print(f"  Average sentences per chunk: {avg_sentences:.1f}")
         print(f"  Max chunk size: {max(sizes)} characters")
         print(f"  Min chunk size: {min(sizes)} characters")
-        print(f"  Median chunk size: {sorted(sizes)[len(sizes)//2]} characters")
         
-        # Size distribution
-        print(f"\nSize Distribution:")
-        ranges = [
-            (0, 200, "Very Small"),
-            (201, 400, "Small"),
-            (401, 600, "Medium (Target)"),
-            (601, 800, "Large"),
-            (801, 1000, "Very Large"),
-            (1001, 9999, "Huge")
-        ]
-        
-        for min_s, max_s, label in ranges:
-            count = sum(1 for s in sizes if min_s <= s <= max_s)
-            pct = (count / len(sizes)) * 100
-            bar = "█" * int(pct / 2)
-            print(f"  {label:20} : {count:4} chunks ({pct:5.1f}%) {bar}")
+        # Show sample chunk with new metadata structure
+        print(f"\nSample chunk output (with page number):")
+        sample = all_chunks[0]
+        print(f"  {{")
+        print(f"    'id': {sample.get('id')},")
+        print(f"    'document_id': {sample.get('document_id')},")
+        print(f"    'document_title': '{sample.get('document_title')}',")
+        print(f"    'page': {sample.get('page')},")
+        print(f"    'size': {sample.get('size')},")
+        print(f"    'sentence_count': {sample.get('sentence_count')},")
+        print(f"    'text': '{sample.get('text', '')[:100]}...'")
+        print(f"  }}")
 
 if __name__ == "__main__":
     main()
