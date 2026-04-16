@@ -1,71 +1,41 @@
-# EXTRACTION_REPORT
+# Extraction Report
 
-## 1. Overview
-This report summarizes the PDF text extraction run for the Artemis II knowledge corpus.
+## Overview
+- Date: 2026-04-10
+- Script: `scripts/extract.py`
+- Engine: PyMuPDF (`fitz`)
+- Input: `data/pdfs`
+- Output: `data/corpus.json`, `data/sample.json`
 
-- Extraction date: 2026-04-10
-- Project: Artemis_II_Knowledge_Navigator
-- Extraction script: `scripts/extract.py`
-- Extraction engine: PyMuPDF (`fitz`)
-- Input folder: `data/pdfs`
-- Output files:
-  - `data/corpus.json`
-  - `data/sample.json`
-
-## 2. Output Format
-Both output files follow the same flat page-level schema:
-
-```json
-[
-  {
-    "source": "example.pdf",
-    "page": 1,
-    "char_count": 1234,
-    "text": "Extracted and cleaned page text..."
-  }
-]
-```
-
-## 3. Corpus Statistics
-Run-level statistics printed by the script:
-
-- Number of documents (PDFs): 3
+## Corpus Stats
+- Documents: 3
 - Total pages: 253
 - Total characters: 493963
-- Average characters per page: 1952.42
-- Number of empty or near-empty pages (< 50 chars): 7
+- Avg chars/page: 1952.42
+- Empty or near-empty pages (`< 50` chars): 7
 
-## 4. Text Cleaning Applied
-The extraction pipeline includes baseline cleanup to improve downstream RAG quality:
+## Main Issues and Fixes
+- Repeated headers/footers:
+  - Problem: same lines appeared on many pages.
+  - Fix: detect repeated top/bottom lines and remove them.
 
-- Whitespace normalization:
-  - Collapses repeated spaces/tabs
-  - Normalizes line endings
-  - Reduces excessive blank lines
-- Repeated header/footer removal:
-  - Detects repeated top/bottom lines across pages
-  - Removes detected repeated lines from each page
-- Paragraph line-break repair:
-  - Converts single newlines (mid-paragraph PDF wraps) into spaces
-  - Keeps paragraph boundaries where double newlines exist
+- Broken line wraps in paragraphs:
+  - Problem: many sentences were split by PDF line breaks.
+  - Fix: merge single line breaks into spaces.
 
-## 5. Sampling Strategy
-`sample.json` contains the first 10 extracted pages from the full corpus in the same schema as `corpus.json` for quick manual inspection.
+- Too much whitespace:
+  - Problem: extra spaces and blank lines made text noisy.
+  - Fix: normalize spaces and reduce blank lines.
 
-## 6. Notes and Limitations
-- Some PDFs may include OCR artifacts, ligatures, or layout-induced text order issues.
-- Table-heavy pages may still require `pdfplumber` for better structure preservation.
-- Header/footer detection is heuristic-based and may miss edge cases in highly variable templates.
+- Table-like pages:
+  - Problem: some tables became flat text.
+  - Fix: kept PyMuPDF output and cleaned it; for important tables, use `pdfplumber`.
 
-## 7. Reproducibility
-Run command used:
+- Near-empty/scanned pages:
+  - Problem: some pages had little machine-readable text.
+  - Fix: count pages with `< 50` chars and report them (7 pages in this run).
 
+## Reproducibility
 ```bash
 python scripts/extract.py data/pdfs
-```
-
-Optional custom output directory:
-
-```bash
-python scripts/extract.py data/pdfs --output-dir data
 ```
