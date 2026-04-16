@@ -644,8 +644,9 @@ def build_ui() -> gr.Blocks:
                 </div>""")
 
                 gr.HTML("""<div class="info-bar">
-                  ⚠ After adding text or a PDF, run <code>scripts/embed.py</code>
-                  once to rebuild index.faiss. Then restart this UI to load the new index.
+                  ⚠ After adding text: run <code>python scripts/embed.py</code> to rebuild index.faiss,
+                  then restart this UI. &nbsp;|&nbsp; After loading a PDF: run
+                  <code>python scripts/chunk_corpus.py</code> then <code>python scripts/embed.py</code>.
                 </div>""")
 
                 with gr.Row():

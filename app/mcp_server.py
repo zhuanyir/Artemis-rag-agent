@@ -450,15 +450,26 @@ def add_to_database(
     overlap    = 100
     step       = chunk_size - overlap   # 400
 
-    new_chunks = []
-    start = 0
-    chunk_index = len(corpus)
+    # ── Load existing chunks.json to get next chunk_id ────────────────────────
+    CHUNKS_PATH = DATA_DIR / "chunks.json"
+    existing_chunks: list[dict] = []
+    if CHUNKS_PATH.exists():
+        with open(CHUNKS_PATH, encoding="utf-8") as f:
+            raw = f.read().rstrip("\x00").rstrip()  # guard against null-byte corruption
+        try:
+            existing_chunks = json.loads(raw)
+        except json.JSONDecodeError:
+            existing_chunks = []
+
+    chunk_index = len(existing_chunks)
+    new_chunks  = []
+    start       = 0
 
     while start < len(text):
         chunk_text = text[start : start + chunk_size].strip()
         if chunk_text:
             new_chunks.append({
-                "chunk_id":   f"agent_{chunk_index:04d}",
+                "chunk_id":   chunk_index,
                 "source":     source,
                 "page":       page,
                 "char_count": len(chunk_text),
@@ -469,13 +480,18 @@ def add_to_database(
             chunk_index += 1
         start += step
 
+    # ── Write to BOTH corpus.json (record) AND chunks.json (new format) ───────
     corpus.extend(new_chunks)
     with open(CORPUS_PATH, "w", encoding="utf-8") as f:
         json.dump(corpus, f, indent=2, ensure_ascii=False)
 
+    existing_chunks.extend(new_chunks)
+    with open(CHUNKS_PATH, "w", encoding="utf-8") as f:
+        json.dump(existing_chunks, f, indent=2, ensure_ascii=False)
+
     msg = (
-        f"✅ Added {len(new_chunks)} chunk(s) from source '{source}' to corpus.json.\n"
-        f"⚠️  Run scripts/embed.py to update the FAISS index with these new chunks."
+        f"✅ Added {len(new_chunks)} chunk(s) from source '{source}' to corpus.json + chunks.json.\n"
+        f"⚠️  Run scripts/embed.py to update the FAISS index.  (No need for chunk_corpus.py)"
     )
     print(f"[MCP] {msg}")
     return msg
@@ -518,11 +534,27 @@ def load_pdf_to_database(pdf_path: str) -> str:
         return f"ERROR: PDF file not found at: {pdf_path}"
 
     pdf_name = os.path.basename(pdf_path)
-    pages_processed = 0
-    total_chunks = 0
+    chunk_size = 500
+    overlap    = 100
+    step       = chunk_size - overlap
 
     try:
         doc = fitz.open(pdf_path)
+
+        # ── Load existing chunks ONCE ─────────────────────────────────────────
+        CHUNKS_PATH = DATA_DIR / "chunks.json"
+        existing_chunks: list[dict] = []
+        if CHUNKS_PATH.exists():
+            with open(CHUNKS_PATH, encoding="utf-8") as f:
+                raw = f.read().rstrip("\x00").rstrip()
+            try:
+                existing_chunks = json.loads(raw)
+            except json.JSONDecodeError:
+                existing_chunks = []
+
+        chunk_index   = len(existing_chunks)
+        new_chunks    = []
+        pages_processed = 0
 
         for page_num in range(len(doc)):
             page = doc[page_num]
@@ -531,25 +563,43 @@ def load_pdf_to_database(pdf_path: str) -> str:
             if not text or len(text) < 50:
                 continue
 
-            result = add_to_database(
-                text=text,
-                source=pdf_name,
-                page=page_num + 1,
-            )
             pages_processed += 1
-
-            if "Added" in result:
-                try:
-                    n = int(result.split("Added")[1].strip().split(" ")[0])
-                    total_chunks += n
-                except Exception:
-                    pass
+            start = 0
+            while start < len(text):
+                chunk_text = text[start : start + chunk_size].strip()
+                if chunk_text:
+                    new_chunks.append({
+                        "chunk_id":   chunk_index,
+                        "source":     pdf_name,
+                        "page":       page_num + 1,
+                        "char_count": len(chunk_text),
+                        "text":       chunk_text,
+                        "added_by":   "load_pdf",
+                        "added_at":   datetime.now().isoformat(),
+                    })
+                    chunk_index += 1
+                start += step
 
         doc.close()
 
+        # ── Single write for all pages at once ────────────────────────────────
+        all_chunks = existing_chunks + new_chunks
+        with open(CHUNKS_PATH, "w", encoding="utf-8") as f:
+            json.dump(all_chunks, f, indent=2, ensure_ascii=False)
+
+        # Also update corpus.json
+        if CORPUS_PATH.exists():
+            with open(CORPUS_PATH, encoding="utf-8") as f:
+                corpus = json.load(f)
+        else:
+            corpus = []
+        corpus.extend(new_chunks)
+        with open(CORPUS_PATH, "w", encoding="utf-8") as f:
+            json.dump(corpus, f, indent=2, ensure_ascii=False)
+
         return (
             f"✅ PDF '{pdf_name}' processed: {pages_processed} pages → "
-            f"~{total_chunks} chunks added to corpus.json.\n"
+            f"{len(new_chunks)} chunks added in a single write.\n"
             f"⚠️  Run scripts/embed.py to update the FAISS index."
         )
 

@@ -236,10 +236,25 @@ def main():
     print(f"  Min chunk size: {MIN_CHUNK_SIZE} characters")
     print(f"  Overlap: {OVERLAP_SENTENCES} sentence(s)")
     
+    # ── Preserve new-format chunks already in chunks.json ────────────────────
+    # New-format chunks (added via add_to_database or load_pdf) have a "source"
+    # key. We must keep them or they will be lost every time this script runs.
+    preserved_chunks = []
+    if output_file.exists():
+        try:
+            with open(output_file, 'r', encoding='utf-8') as f:
+                raw = f.read().rstrip('\x00').rstrip()
+            existing = json.loads(raw)
+            preserved_chunks = [c for c in existing if c.get("source")]
+            if preserved_chunks:
+                print(f"Preserving {len(preserved_chunks)} new-format chunks (user-added/web).")
+        except Exception as e:
+            print(f"Warning: could not load existing chunks.json ({e}), starting fresh.")
+
     all_chunks = []
     chunk_id = 0
     documents_with_content = 0
-    
+
     # Process each document
     for doc_id, document in enumerate(corpus):
         title = get_document_title(document)
@@ -289,11 +304,15 @@ def main():
         print("\n⚠️  WARNING: No chunks were generated!")
         return
     
+    # Merge: old-format re-chunked + preserved new-format chunks
+    combined_chunks = all_chunks + preserved_chunks
+
     # Save chunks to file
-    print(f"\nSaving chunks to {output_file}...")
+    print(f"\nSaving {len(combined_chunks)} chunks to {output_file} "
+          f"({len(all_chunks)} re-chunked + {len(preserved_chunks)} preserved)...")
     try:
         with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(all_chunks, f, indent=2, ensure_ascii=False)
+            json.dump(combined_chunks, f, indent=2, ensure_ascii=False)
         print("✅ Successfully saved chunks!")
     except Exception as e:
         print(f"Error saving chunks: {e}")
