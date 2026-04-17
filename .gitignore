@@ -2,4 +2,9 @@
 __pycache__/
 *.pyc
 data/
-.env 
+.env
+*.log
+email_bridge.log
+reports/
+cost_tracker.json
+
