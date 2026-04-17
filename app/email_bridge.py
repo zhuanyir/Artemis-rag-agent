@@ -101,53 +101,71 @@ PIPELINE_READY = False
 _run_rag       = None
 
 try:
-    import faiss
-    import numpy as np
-    from openai import OpenAI
-
-    DATA_DIR         = ROOT_DIR / "data"
-    CHUNKS_PATH      = DATA_DIR / "chunks.json"
-    FAISS_INDEX_PATH = DATA_DIR / "index.faiss"
-
-    with open(CHUNKS_PATH, encoding="utf-8") as f:
-        _chunks_list = json.load(f)
-
-    _index  = faiss.read_index(str(FAISS_INDEX_PATH))
-    _openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-    from generator import generate_answer  # type: ignore
-
-    def _retrieve(query: str, k: int = 5) -> list[dict]:
-        resp = _openai.embeddings.create(
-            model="text-embedding-3-small", input=query[:500]
-        )
-        vec = np.array(resp.data[0].embedding, dtype="float32").reshape(1, -1)
-        faiss.normalize_L2(vec)
-        scores, indices = _index.search(vec, k)
-        results = []
-        for score, idx in zip(scores[0], indices[0]):
-            if 0 <= idx < len(_chunks_list):
-                c = dict(_chunks_list[idx])
-                c["score"] = round(float(score), 4)
-                results.append(c)
-        return results
+    from agents import run_agentic_pipeline  # type: ignore
 
     def _run_rag(question: str) -> str:
-        chunks = _retrieve(question)
-        return generate_answer(question, chunks, history=None)
+        """Run the full 3-agent pipeline (Agent 1 + Agent 2 + Agent 3)."""
+        result = run_agentic_pipeline(
+            query=question,
+            save_report=True,
+            check_external=True,
+            save_web_to_corpus=False,   # don't pollute corpus from email queries
+        )
+        return result["final_answer"]
 
     PIPELINE_READY = True
-    log("✅ RAG pipeline loaded successfully.")
+    log("✅ 3-Agent pipeline loaded successfully (Agent 1 + Agent 2 + Agent 3).")
 
 except Exception as exc:
-    log(f"⚠️  RAG pipeline not ready: {exc}. Running in echo mode.")
+    log(f"⚠️  3-Agent pipeline not ready: {exc}. Trying plain RAG fallback...")
 
-    def _run_rag(question: str) -> str:  # type: ignore[misc]
-        return (
-            "The RAG pipeline is not currently loaded. "
-            f"Your question was: '{question}'. "
-            "Please contact the administrator."
-        )
+    try:
+        import faiss
+        import numpy as np
+        from openai import OpenAI
+        from generator import generate_answer  # type: ignore
+
+        DATA_DIR         = ROOT_DIR / "data"
+        CHUNKS_PATH      = DATA_DIR / "chunks.json"
+        FAISS_INDEX_PATH = DATA_DIR / "index.faiss"
+
+        with open(CHUNKS_PATH, encoding="utf-8") as f:
+            _chunks_list = json.load(f)
+
+        _index  = faiss.read_index(str(FAISS_INDEX_PATH))
+        _openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+        def _retrieve(query: str, k: int = 5) -> list[dict]:
+            resp = _openai.embeddings.create(
+                model="text-embedding-3-small", input=query[:500]
+            )
+            vec = np.array(resp.data[0].embedding, dtype="float32").reshape(1, -1)
+            faiss.normalize_L2(vec)
+            scores, indices = _index.search(vec, k)
+            results = []
+            for score, idx in zip(scores[0], indices[0]):
+                if 0 <= idx < len(_chunks_list):
+                    c = dict(_chunks_list[idx])
+                    c["score"] = round(float(score), 4)
+                    results.append(c)
+            return results
+
+        def _run_rag(question: str) -> str:  # type: ignore[misc]
+            chunks = _retrieve(question)
+            return generate_answer(question, chunks, history=None)
+
+        PIPELINE_READY = True
+        log("✅ Plain RAG fallback loaded.")
+
+    except Exception as exc2:
+        log(f"⚠️  Plain RAG also failed: {exc2}. Running in echo mode.")
+
+        def _run_rag(question: str) -> str:  # type: ignore[misc]
+            return (
+                "The RAG pipeline is not currently loaded. "
+                f"Your question was: '{question}'. "
+                "Please contact the administrator."
+            )
 
 
 # =============================================================================
@@ -339,7 +357,23 @@ def poll_once() -> int:
 
         log(f"Processing email from {sender} | Subject: {subject}")
         query = _clean_query(subject, body)
-        log(f"   Query: '{query[:120]}...'")
+        log(f"   Query: '{query[:120]}'")
+
+        if not query.strip():
+            log("⚠️  Empty query — sending usage instructions.")
+            answer = (
+                "Your email was received but the body was empty.\n\n"
+                "To ask a question, send an email with:\n"
+                "  Subject: [ARTEMIS]\n"
+                "  Body:    Your question here\n\n"
+                "Example:\n"
+                "  Subject: [ARTEMIS]\n"
+                "  Body:    Who are the crew members of Artemis II?"
+            )
+            to_addr = _extract_address(sender)
+            send_reply(to_address=to_addr, subject=subject, answer=answer)
+            mark_as_read(imap_id)
+            continue
 
         try:
             answer = _run_rag(query)
